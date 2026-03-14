@@ -1,0 +1,28 @@
+# Source files (only dist/ should be published)
+src/
+
+# Development files
+demo.ts
+test.json
+tsconfig.json
+*.config.*
+
+# Git files
+.git*
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+
+# Development tools
+prettier.config.mjs
+.prettierignore
