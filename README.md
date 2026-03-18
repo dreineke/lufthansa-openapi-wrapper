@@ -13,6 +13,7 @@ A TypeScript/JavaScript wrapper for the Lufthansa OpenAPI, providing a clean, ty
 - 📄 **Pagination Support**: Easy handling of paginated results
 - 📝 **Full TypeScript Support**: Complete type definitions
 - 🛡️ **Error Handling**: Comprehensive error handling and validation
+- 📊 **Optional Logging**: Detailed request/response logging for debugging
 
 ## Installation
 
@@ -76,6 +77,17 @@ const client = new LufthansaApiClient({
   timeoutMs: 30000, // Optional, request timeout (default: 10s)
   maxRetries: 3, // Optional, retry attempts (default: 3)
   userAgent: 'my-app/1.0', // Optional, custom user agent
+
+  // Optional: Logging configuration for debugging
+  logging: {
+    enabled: true, // Enable logging
+    level: 'info', // 'debug' | 'info' | 'warn' | 'error'
+    logRequests: true, // Log request details
+    logResponses: true, // Log response details
+    logRetries: true, // Log retry attempts
+    logTokenOps: false, // Log OAuth token operations
+    logErrors: true, // Log error details
+  },
 });
 ```
 
@@ -291,9 +303,63 @@ try {
 ## Common Error Cases
 
 - **401 Unauthorized**: Invalid OAuth credentials
+- **403 Forbidden (Quota Exceeded)**: API quota limits reached (automatic retry with exponential backoff)
 - **429 Too Many Requests**: Rate limit exceeded (automatic retry with backoff)
 - **404 Not Found**: Resource not found (e.g., invalid airport code)
 - **400 Bad Request**: Invalid parameters (e.g., malformed date)
+
+## Optional Logging
+
+The wrapper includes logging capabilities for debugging and monitoring API requests. Logging is completely optional and disabled by default.
+
+### Basic Logging Setup
+
+```typescript
+const client = new LufthansaApiClient({
+  oauth: {
+    clientId: 'your-client-id',
+    clientSecret: 'your-client-secret',
+  },
+  logging: {
+    enabled: true,
+    level: 'info', // 'debug', 'info', 'warn', or 'error'
+  },
+});
+```
+
+### What Gets Logged
+
+- **Request Details**: HTTP method, URL, query parameters, timing
+- **Response Details**: Status codes, response times, attempt counts
+- **Retry Operations**: Retry reasons, backoff delays, rate limit handling
+- **OAuth Operations**: Token fetches, cache hits, refresh operations
+- **Error Details**: Complete error context for troubleshooting
+
+### Custom Logger Integration
+
+```typescript
+import { Logger, LogContext } from 'lufthansa-openapi-wrapper';
+
+class CustomLogger implements Logger {
+  debug(message: string, context?: LogContext): void {
+    // Your debug logging implementation
+  }
+  // ... other methods
+}
+
+const client = new LufthansaApiClient({
+  oauth: {
+    /* ... */
+  },
+  logging: {
+    enabled: true,
+    logger: new CustomLogger(),
+    logRequests: true,
+    logRetries: true,
+    logErrors: true,
+  },
+});
+```
 
 ## Date and Time Formats
 
@@ -366,6 +432,15 @@ This is an unofficial wrapper for the Lufthansa OpenAPI. It is not affiliated wi
 - 🐛 [Issue Tracker](https://github.com/dreineke/lufthansa-openapi-wrapper/issues)
 
 ## Changelog
+
+### 1.0.2
+
+- Added comprehensive optional logging system for debugging and monitoring
+- Enhanced 403 quota error handling with automatic retry and exponential backoff
+- Added request tracking with unique IDs for correlation
+- Enhanced retry logic with detailed logging of attempts and backoff times
+- Added support for custom logger integration (Winston, Pino, etc.)
+- Performance optimizations with zero overhead when logging is disabled
 
 ### 1.0.0
 
