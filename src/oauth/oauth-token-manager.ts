@@ -1,4 +1,5 @@
 import type { LufthansaOAuthConfig } from '../types/common.js';
+import type { Logger, LoggingConfig } from '../types/logger.js';
 import { nowUnixMs } from '../utils/time.js';
 
 type TokenResponse = {
@@ -17,14 +18,18 @@ type StoredToken = {
  */
 export class OAuthTokenManager {
   private readonly config: Required<LufthansaOAuthConfig>;
+  private readonly logger: Logger;
+  private readonly loggingConfig: LoggingConfig;
   private token: StoredToken | null = null;
   private refreshInFlight: Promise<string> | null = null;
 
-  constructor(config: LufthansaOAuthConfig) {
+  constructor(config: LufthansaOAuthConfig, logger: Logger, loggingConfig: LoggingConfig) {
     this.config = {
       tokenUrl: 'https://api.lufthansa.com/v1/oauth/token',
       ...config,
     };
+    this.logger = logger;
+    this.loggingConfig = loggingConfig;
   }
 
   /**
@@ -32,11 +37,24 @@ export class OAuthTokenManager {
    */
   async getAccessToken(): Promise<string> {
     if (this.isTokenUsable()) {
+      if (this.loggingConfig.logTokenOps) {
+        this.logger.debug('Using cached access token', {
+          expiresAtMs: this.token!.expiresAtMs,
+          timeToExpiryMs: this.token!.expiresAtMs - nowUnixMs(),
+        });
+      }
       return this.token!.accessToken;
     }
 
     if (this.refreshInFlight) {
+      if (this.loggingConfig.logTokenOps) {
+        this.logger.debug('Waiting for in-flight token refresh');
+      }
       return this.refreshInFlight;
+    }
+
+    if (this.loggingConfig.logTokenOps) {
+      this.logger.info('Fetching new access token');
     }
 
     this.refreshInFlight = this.fetchToken().finally(() => {
@@ -51,7 +69,14 @@ export class OAuthTokenManager {
    */
   async forceRefresh(): Promise<string> {
     if (this.refreshInFlight) {
+      if (this.loggingConfig.logTokenOps) {
+        this.logger.debug('Waiting for in-flight forced token refresh');
+      }
       return this.refreshInFlight;
+    }
+
+    if (this.loggingConfig.logTokenOps) {
+      this.logger.info('Forcing token refresh');
     }
 
     this.refreshInFlight = this.fetchToken().finally(() => {
@@ -75,6 +100,15 @@ export class OAuthTokenManager {
       grant_type: 'client_credentials',
     });
 
+    const startTime = Date.now();
+
+    if (this.loggingConfig.logTokenOps) {
+      this.logger.debug('Requesting OAuth token', {
+        tokenUrl: this.config.tokenUrl,
+        clientId: this.config.clientId,
+      });
+    }
+
     const response = await fetch(this.config.tokenUrl, {
       method: 'POST',
       headers: {
@@ -84,8 +118,21 @@ export class OAuthTokenManager {
       body,
     });
 
+    const duration = Date.now() - startTime;
+
     if (!response.ok) {
       const text = await response.text().catch(() => '');
+
+      if (this.loggingConfig.logTokenOps) {
+        this.logger.error('OAuth token fetch failed', {
+          tokenUrl: this.config.tokenUrl,
+          status: response.status,
+          statusText: response.statusText,
+          duration,
+          errorBody: text,
+        });
+      }
+
       throw new Error(
         `Lufthansa token fetch failed: ${response.status} ${response.statusText} ${text}`,
       );
@@ -94,13 +141,33 @@ export class OAuthTokenManager {
     const json = (await response.json()) as TokenResponse;
 
     if (!json.access_token) {
+      if (this.loggingConfig.logTokenOps) {
+        this.logger.error('OAuth token response missing access_token', {
+          tokenUrl: this.config.tokenUrl,
+          response: json,
+          duration,
+        });
+      }
+
       throw new Error('Lufthansa token response misses access_token');
     }
 
+    const expiresInSeconds = json.expires_in ?? 300;
+    const expiresAtMs = Date.now() + expiresInSeconds * 1000;
+
     this.token = {
       accessToken: json.access_token,
-      expiresAtMs: Date.now() + (json.expires_in ?? 300) * 1000,
+      expiresAtMs,
     };
+
+    if (this.loggingConfig.logTokenOps) {
+      this.logger.info('OAuth token fetched successfully', {
+        tokenUrl: this.config.tokenUrl,
+        expiresInSeconds,
+        expiresAtMs,
+        duration,
+      });
+    }
 
     return this.token.accessToken;
   }

@@ -1,3 +1,5 @@
+import type { LoggingConfig } from './logger.js';
+
 export type LufthansaOAuthConfig = {
   clientId: string;
   clientSecret: string;
@@ -11,6 +13,7 @@ export type LufthansaClientConfig = {
   timeoutMs?: number;
   maxRetries?: number;
   userAgent?: string;
+  logging?: Partial<LoggingConfig>;
 };
 
 export type Link = {
